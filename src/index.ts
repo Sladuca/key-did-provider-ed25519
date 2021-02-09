@@ -11,6 +11,7 @@ import {
 import stringify from 'fast-json-stable-stringify'
 import * as u8a from 'uint8arrays'
 import { generateKeyPairFromSeed, convertSecretKeyToX25519 } from '@stablelib/ed25519'
+import { KeyPair, utils } from 'near-api-js'
 
 const B64 = 'base64pad'
 
@@ -117,6 +118,28 @@ export class Ed25519Provider implements RPCConnection {
 
   constructor(seed: Uint8Array) {
     const { secretKey, publicKey } = generateKeyPairFromSeed(seed)
+    const did = encodeDID(publicKey)
+    const handler: RequestHandler = createHandler<Context>(didMethods)
+    this._handle = (msg: RPCRequest) => {
+      return handler({ did, secretKey }, msg)
+    }
+  }
+
+  public get isDidProvider(): boolean {
+    return true
+  }
+
+  public async send(msg: RPCRequest): Promise<RPCResponse | null> {
+    return await this._handle(msg)
+  }
+}
+
+export class NearWalletProvider implements RPCConnection {
+  protected _handle: (msg: RPCRequest) => Promise<RPCResponse | null>
+
+  constructor(keyPair: KeyPair) {
+    const publicKey = keyPair.getPublicKey().data
+    const secretKey = utils.serialize.base_decode(keyPair.toString().substring('ed25519:'.length))
     const did = encodeDID(publicKey)
     const handler: RequestHandler = createHandler<Context>(didMethods)
     this._handle = (msg: RPCRequest) => {
